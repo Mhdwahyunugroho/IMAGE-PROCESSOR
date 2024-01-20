@@ -4,15 +4,70 @@ document.addEventListener('DOMContentLoaded', function () {
     const ctx = outputCanvas.getContext('2d');
     const brightnessRange = document.getElementById('brightnessRange');
     const darknessRange = document.getElementById('darknessRange');
-    const downloadBtn = document.getElementById('downloadBtn'); // Menambahkan id pada tombol download
-
-    let originalImageData; // Simpan data gambar asli
+    const downloadBtn = document.getElementById('downloadBtn');
+    const formatSelect = document.getElementById('formatSelect');
+    let originalImageData;
     let filters = {
         brightness: 100,
         darkness: 0,
         isGrayscale: false,
     };
-
+    var TxtType = function(el, toRotate, period) {
+        this.toRotate = toRotate;
+        this.el = el;
+        this.loopNum = 0;
+        this.period = parseInt(period, 10) || 2000;
+        this.txt = '';
+        this.tick();
+        this.isDeleting = false;
+        };
+        
+        TxtType.prototype.tick = function() {
+        var i = this.loopNum % this.toRotate.length;
+        var fullTxt = this.toRotate[i];
+        
+        if (this.isDeleting) {
+        this.txt = fullTxt.substring(0, this.txt.length - 1);
+        } else {
+        this.txt = fullTxt.substring(0, this.txt.length + 1);
+        }
+        
+        this.el.innerHTML = '<span class="wrap">'+this.txt+'</span>';
+        
+        var that = this;
+        var delta = 200 - Math.random() * 100;
+        
+        if (this.isDeleting) { delta /= 2; }
+        
+        if (!this.isDeleting && this.txt === fullTxt) {
+        delta = this.period;
+        this.isDeleting = true;
+        } else if (this.isDeleting && this.txt === '') {
+        this.isDeleting = false;
+        this.loopNum++;
+        delta = 500;
+        }
+        
+        setTimeout(function() {
+        that.tick();
+        }, delta);
+        };
+        
+        window.onload = function() {
+        var elements = document.getElementsByClassName('typewrite');
+        for (var i=0; i<elements.length; i++) {
+        var toRotate = elements[i].getAttribute('data-type');
+        var period = elements[i].getAttribute('data-period');
+        if (toRotate) {
+        new TxtType(elements[i], JSON.parse(toRotate), period);
+        }
+        }
+        // INJECT CSS
+        var css = document.createElement("style");
+        css.type = "text/css";
+        css.innerHTML = ".typewrite > .wrap { border-right: 0.08em solid #fff}";
+        document.body.appendChild(css);
+        };
     input.addEventListener('change', handleImageUpload);
 
     function handleImageUpload(event) {
@@ -25,7 +80,6 @@ document.addEventListener('DOMContentLoaded', function () {
                 img.onload = function () {
                     const maxWidth = 500;
                     const maxHeight = 500;
-
                     let width = img.width;
                     let height = img.height;
 
@@ -43,7 +97,9 @@ document.addEventListener('DOMContentLoaded', function () {
                     outputCanvas.height = height;
 
                     ctx.drawImage(img, 0, 0, width, height);
+
                     originalImageData = ctx.getImageData(0, 0, width, height);
+
                     enableButtons();
                 };
             };
@@ -54,7 +110,8 @@ document.addEventListener('DOMContentLoaded', function () {
     function enableButtons() {
         brightnessRange.disabled = false;
         darknessRange.disabled = false;
-        downloadBtn.disabled = false; // Mengaktifkan tombol download
+        downloadBtn.disabled = false;
+        formatSelect.disabled = false;
     }
 
     function adjustBrightness(value) {
@@ -77,7 +134,6 @@ document.addEventListener('DOMContentLoaded', function () {
         const { brightness, darkness, isGrayscale } = filters;
         outputCanvas.style.filter = `brightness(${brightness}%) contrast(${100 - darkness}%)`;
 
-        // Apply grayscale filter if it was activated
         if (isGrayscale) {
             outputCanvas.style.filter += ' grayscale(100%)';
         }
@@ -107,7 +163,6 @@ document.addEventListener('DOMContentLoaded', function () {
         const imageData = ctx.getImageData(0, 0, outputCanvas.width, outputCanvas.height);
         const grayscaleData = ctx.getImageData(0, 0, outputCanvas.width, outputCanvas.height);
 
-        // Ubah gambar menjadi grayscale
         for (let i = 0; i < imageData.data.length; i += 4) {
             const avg = (imageData.data[i] + imageData.data[i + 1] + imageData.data[i + 2]) / 3;
             grayscaleData.data[i] = avg;
@@ -116,21 +171,17 @@ document.addEventListener('DOMContentLoaded', function () {
             grayscaleData.data[i + 3] = 255;
         }
 
-        const edgeData = applyEdgeDetection(grayscaleData); // Panggil fungsi deteksi tepi
+        const edgeData = applyEdgeDetection(grayscaleData);
         ctx.putImageData(edgeData, 0, 0);
     }
 
-    // Fungsi deteksi tepi menggunakan filter Sobel
     function applyEdgeDetection(grayscaleData) {
         const sobelData = new ImageData(grayscaleData.width, grayscaleData.height);
-
-        // Matriks Sobel untuk deteksi tepi
         const sobelMatrixX = [
             [-1, 0, 1],
             [-2, 0, 2],
             [-1, 0, 1]
         ];
-
         const sobelMatrixY = [
             [-1, -2, -1],
             [0, 0, 0],
@@ -142,7 +193,6 @@ document.addEventListener('DOMContentLoaded', function () {
                 let pixelX = 0;
                 let pixelY = 0;
 
-                // Konvolusi matriks Sobel
                 for (let i = 0; i < 3; i++) {
                     for (let j = 0; j < 3; j++) {
                         const pixelValue = grayscaleData.data[((y + j - 1) * grayscaleData.width + (x + i - 1)) * 4];
@@ -161,6 +211,78 @@ document.addEventListener('DOMContentLoaded', function () {
 
         return sobelData;
     }
+
+    function adjustGrayscale() {
+        filters.isGrayscale = !filters.isGrayscale;
+        applyFilter();
+    }
+    
+    function applyFilter() {
+        updateCanvasFilter();
+        updateCanvasGreyscale();
+    }
+    
+    function updateCanvasGreyscale() {
+        const { isGrayscale } = filters;
+        if (isGrayscale) {
+            const imageData = ctx.getImageData(0, 0, outputCanvas.width, outputCanvas.height);
+            for (let i = 0; i < imageData.data.length; i += 4) {
+                const avg = (imageData.data[i] + imageData.data[i + 1] + imageData.data[i + 2]) / 3;
+                imageData.data[i] = avg;
+                imageData.data[i + 1] = avg;
+                imageData.data[i + 2] = avg;
+            }
+            ctx.putImageData(imageData, 0, 0);
+        }
+    }
+    
+    function downloadImage(format) {
+        const tempCanvas = document.createElement('canvas');
+        const tempCtx = tempCanvas.getContext('2d');
+        tempCanvas.width = outputCanvas.width;
+        tempCanvas.height = outputCanvas.height;
+    
+        // Terapkan orientasi horizontal atau vertikal ke canvas sementara
+        if (outputCanvas.classList.contains('horizontal')) {
+            tempCtx.translate(tempCanvas.width, 0);
+            tempCtx.scale(-1, 1);
+        } else if (outputCanvas.classList.contains('vertical')) {
+            tempCtx.translate(0, tempCanvas.height);
+            tempCtx.scale(1, -1);
+        }
+    
+        // Terapkan filter dan gambar ke canvas sementara
+        tempCtx.drawImage(outputCanvas, 0, 0, outputCanvas.width, outputCanvas.height);
+        tempCanvas.style.filter = outputCanvas.style.filter;
+    
+        // Perbarui greyscale jika diterapkan
+        if (filters.isGrayscale) {
+            const imageData = tempCtx.getImageData(0, 0, tempCanvas.width, tempCanvas.height);
+            for (let i = 0; i < imageData.data.length; i += 4) {
+                const avg = (imageData.data[i] + imageData.data[i + 1] + imageData.data[i + 2]) / 3;
+                imageData.data[i] = avg;
+                imageData.data[i + 1] = avg;
+                imageData.data[i + 2] = avg;
+            }
+            tempCtx.putImageData(imageData, 0, 0);
+        }
+    
+        // Unduh gambar dengan format yang dipilih
+        const dataURL = tempCanvas.toDataURL(`image/${format}`);
+        const fileName = `processed_image.${format}`;
+        
+        const link = document.createElement('a');
+        link.href = dataURL;
+        link.download = fileName;
+    
+        document.body.appendChild(link);
+        link.click();
+    
+        document.body.removeChild(link);
+    }
+    
+    
+    
 
     document.getElementById('brightnessRange').addEventListener('input', function () {
         adjustBrightness(this.value);
@@ -191,15 +313,7 @@ document.addEventListener('DOMContentLoaded', function () {
     });
 
     downloadBtn.addEventListener('click', function () {
-        downloadImage();
+        const selectedFormat = formatSelect.value;
+        downloadImage(selectedFormat);
     });
-
-    function downloadImage() {
-        const link = document.createElement('a');
-        link.href = outputCanvas.toDataURL();
-        link.download = 'processed_image.png';
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-    }
 });
